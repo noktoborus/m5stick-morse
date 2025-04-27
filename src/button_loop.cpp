@@ -1,4 +1,5 @@
 #include "app.hpp"
+#include "morse/morse.hpp"
 #include <M5Unified.h>
 
 void button_setup(void) { M5_LOGI("Button started"); }

@@ -1,4 +1,5 @@
-#include <app.hpp>
+#include "app.hpp"
+#include "morse/morse.hpp"
 
 QueueHandle_t morseQueue;
 
