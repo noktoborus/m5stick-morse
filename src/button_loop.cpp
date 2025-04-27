@@ -23,7 +23,7 @@ void button_loop(QueueHandle_t *morseQueue) {
     last_msec = msec;
   }
 
-  if (M5.BtnPWR.wasPressed()) {
+  if (M5.BtnB.wasPressed()) {
     esp_restart();
   }
 
