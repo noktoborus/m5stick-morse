@@ -6,6 +6,34 @@
 
 M5Canvas morse_canvas;
 M5Canvas letter_canvas;
+M5Canvas history_canvas;
+M5Canvas ticktack_canvas;
+
+void ticktack_canvas_setup(void) {
+  ticktack_canvas.createSprite(80, 4);
+  ticktack_canvas.fillSprite(TFT_DARKGREEN);
+}
+
+void ticktack_canvas_tick(void) {
+  // TODO: нужно переделать очередь ожиданиz символовЖ вместо ожидания word и
+  // спользовать время ожидания dit, после каждого таймаута тикать бар
+  ticktack_canvas.pushSprite(&M5.Display, 0, 156);
+}
+
+void history_canvas_setup(void) {
+  history_canvas.createSprite(80, 80);
+  history_canvas.fillSprite(TFT_BLACK);
+  history_canvas.setTextSize(2);
+  history_canvas.setTextColor(TFT_DARKGREEN);
+  history_canvas.setTextScroll(true);
+}
+
+void history_canvas_push(const char letter) {
+  char string[] = {letter, '\0'};
+
+  history_canvas.printf(string);
+  history_canvas.pushSprite(&M5.Display, 0, 76);
+}
 
 void morse_canvas_setup(void) {
   morse_canvas.createSprite(80, 16);
@@ -27,7 +55,7 @@ void morse_canvas_draw(const char code[MORSE_SEQUENCE_MAX]) {
 void letter_canvas_clear() { letter_canvas.fillSprite(TFT_BLACK); };
 
 void letter_canvas_setup(void) {
-  letter_canvas.createSprite(80, 80);
+  letter_canvas.createSprite(80, 60);
   letter_canvas.fillSprite(TFT_BLACK);
   letter_canvas.setTextSize(4);
   letter_canvas.setTextDatum(middle_center);
@@ -55,6 +83,9 @@ void display_setup(void) {
   M5.Display.setBrightness(80);
   morse_canvas_setup();
   letter_canvas_setup();
+  history_canvas_setup();
+  ticktack_canvas_setup();
+  ticktack_canvas_tick();
   morse_canvas_draw("MORSE");
   M5_LOGI("Display start with size: %" PRIu32 "x%" PRIu32, M5.Display.height(),
           M5.Display.width());
@@ -127,12 +158,13 @@ void display_loop(QueueHandle_t *morseQueue) {
       if (timing.is_dah(message.interval)) {
         M5_LOGI("LETTER-PAUSE: %" PRIu32 " ms", message.interval, seq.code);
         letter_canvas_draw(seq.letter(), true);
+        history_canvas_push(seq.letter());
         seq.done();
       }
 
       if (timing.is_word(message.interval)) {
         M5_LOGI("WORD-PAUSE %" PRIu32 " ms", message.interval);
-        // TODO: word done
+        history_canvas_push(' ');
       }
       return;
     } else if (!message.is_silent) {
@@ -167,6 +199,7 @@ void display_loop(QueueHandle_t *morseQueue) {
             seq.letter());
     morse_canvas_draw(seq.code);
     letter_canvas_draw(seq.letter(), true);
+    history_canvas_push(seq.letter());
     seq.done();
     return;
   } else {
