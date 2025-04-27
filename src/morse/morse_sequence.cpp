@@ -1,11 +1,6 @@
 #include "morse.hpp"
 #include <cstring>
 
-typedef struct Morse {
-  char alpha_num;
-  char code[MORSE_SEQUENCE_MAX];
-} Morse;
-
 const static Morse MorseABC[] = {
     {'A', {DIT, DAH}},
     {'B', {DAH, DIT, DIT, DIT}},
@@ -94,14 +89,25 @@ bool MorseSequence::is_valid_sequence() {
   }
 
   if (better_match != NULL) {
-    this->last_letter = better_match->alpha_num;
+    this->match = better_match;
     return true;
   }
 
   return false;
 }
 
-char MorseSequence::letter() { return this->last_letter; }
+bool MorseSequence::is_complete_sequence() {
+  if (this->match != NULL && this->match->code[this->len] == '\0')
+    return true;
+  return false;
+}
+
+char MorseSequence::letter() {
+  if (this->match != NULL)
+    return this->match->alpha_num;
+
+  return ' ';
+}
 
 void MorseSequence::push(char letter, SignalSilent *interval) {
   this->code[this->len] = letter;
@@ -115,5 +121,6 @@ void MorseSequence::clear() {
   for (; this->len > 0; this->len--) {
     this->code[this->len] = '\0';
     this->interval[this->len] = SignalSilent{};
+    this->match = NULL;
   }
 }

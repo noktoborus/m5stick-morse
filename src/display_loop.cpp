@@ -62,7 +62,7 @@ void letter_canvas_setup(void) {
   letter_canvas_clear();
 };
 
-void letter_canvas_draw(const char letter, bool is_done) {
+void letter_canvas_draw(const char letter, bool is_done, bool is_error) {
   char string[] = {letter, '\0'};
   auto x = letter_canvas.width() / 2;
   auto y = letter_canvas.height() / 2;
@@ -70,9 +70,18 @@ void letter_canvas_draw(const char letter, bool is_done) {
   letter_canvas.fillSprite(TFT_BLACK);
 
   if (!is_done) {
-    letter_canvas.setTextColor(TFT_DARKGREEN);
+    if (is_error) {
+      letter_canvas.setTextColor(TFT_DARKGREEN);
+    } else {
+      letter_canvas.setTextColor(TFT_GREEN);
+    }
   } else {
-    letter_canvas.setTextColor(TFT_GREEN);
+    if (is_error)
+      letter_canvas.setTextColor(TFT_RED);
+    else {
+      letter_canvas.fillSprite(TFT_GREEN);
+      letter_canvas.setTextColor(TFT_BLACK);
+    }
   }
 
   letter_canvas.drawString(string, x, y);
@@ -157,8 +166,12 @@ void display_loop(QueueHandle_t *morseQueue) {
     if (message.is_silent && !seq.is_empty()) {
       if (timing.is_dah(message.interval)) {
         M5_LOGI("LETTER-PAUSE: %" PRIu32 " ms", message.interval, seq.code);
-        letter_canvas_draw(seq.letter(), true);
-        history_canvas_push(seq.letter());
+        if (seq.is_complete_sequence()) {
+          letter_canvas_draw(seq.letter(), true, false);
+          history_canvas_push(seq.letter());
+        } else {
+          letter_canvas_draw(seq.letter(), true, true);
+        }
         seq.done();
       }
 
@@ -185,7 +198,7 @@ void display_loop(QueueHandle_t *morseQueue) {
         if (seq.is_valid_sequence()) {
           M5_LOGI("%s: %" PRIu32 " ms ('%s': '%c')", title, message.interval,
                   seq.code, seq.letter());
-          letter_canvas_draw(seq.letter(), false);
+          letter_canvas_draw(seq.letter(), false, !seq.is_complete_sequence());
         } else {
           M5_LOGI("clear unknown/invalid sequence: %s", seq.code);
           seq.clear();
@@ -198,8 +211,12 @@ void display_loop(QueueHandle_t *morseQueue) {
     M5_LOGI("done, signals num: %u ('%s': %c)", seq.len, seq.code,
             seq.letter());
     morse_canvas_draw(seq.code);
-    letter_canvas_draw(seq.letter(), true);
-    history_canvas_push(seq.letter());
+    if (seq.is_complete_sequence()) {
+      letter_canvas_draw(seq.letter(), true, false);
+      history_canvas_push(seq.letter());
+    } else {
+      letter_canvas_draw(seq.letter(), true, true);
+    }
     seq.done();
     return;
   } else {

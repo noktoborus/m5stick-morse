@@ -1,13 +1,5 @@
 #include <cstdint>
 
-// 32-bits milliseconds
-typedef uint32_t millis32_t;
-
-typedef struct MorseMessage {
-  millis32_t interval;
-  bool is_silent;
-} SignalSilent;
-
 #define DIT '.'
 #define DAH '_'
 
@@ -31,6 +23,19 @@ typedef struct MorseMessage {
 // > Medium gap (between words): seven time units long (formerly five)
 // so, to distinguish DIT and DATH from '4' is enough
 #define WORD_PAUSE_MULTIPLIER 4
+
+typedef struct Morse {
+  char alpha_num;
+  char code[MORSE_SEQUENCE_MAX];
+} Morse;
+
+// 32-bits milliseconds
+typedef uint32_t millis32_t;
+
+typedef struct MorseMessage {
+  millis32_t interval;
+  bool is_silent;
+} SignalSilent;
 
 class MorseTimings {
 public:
@@ -62,8 +67,8 @@ private:
   // drop letter if exceeded
   unsigned morse_code_threshold;
 
-  /// Last founded letter after `::is_valid_sequence()`
-  char last_letter;
+  /// Last founded code after `::is_valid_sequence()`
+  const Morse *match;
 
 public:
   char code[MORSE_SEQUENCE_MAX];
@@ -77,6 +82,9 @@ public:
 
   // True if current sequence exist in ABC
   bool is_valid_sequence();
+
+  // True if current sequence is fully complete
+  bool is_complete_sequence();
 
   // callable only after `::is_valid_sequence()`
   char letter();
