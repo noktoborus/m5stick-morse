@@ -15,10 +15,13 @@ void ticktack_canvas_setup(void) {
   ticktack_canvas.fillSprite(TFT_DARKGREEN);
 }
 
-void ticktack_canvas_tick(void) {
+void ticktack_canvas_tick(bool reset = false) {
   static int blocks[] = {TFT_RED, TFT_YELLOW, TFT_GREEN, TFT_BLUE, TFT_ORANGE};
   static unsigned current = 0;
   const auto blocks_count = sizeof(blocks) / sizeof(blocks[0]);
+
+  if (reset)
+    current = blocks_count;
 
   auto width = ticktack_canvas.width();
   auto height = ticktack_canvas.height();
@@ -247,8 +250,9 @@ void display_loop() {
   if (M5.BtnA.wasChangePressed()) {
     last_msec = M5.getUpdateMsec();
     interval = 0;
-    if (is_signal && (first_signal_at == 0 || first_signal_at > last_msec)) {
+    if (is_signal) {
       first_signal_at = last_msec;
+      ticktack_canvas_tick(true);
     }
   }
 
