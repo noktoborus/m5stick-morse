@@ -1,4 +1,5 @@
 #include "app.hpp"
+#include "freertos/idf_additions.h"
 #include "lgfx/v1/misc/enum.hpp"
 #include "morse/morse.hpp"
 #include "utility/Log_Class.hpp"
@@ -29,9 +30,7 @@ void history_canvas_setup(void) {
 }
 
 void history_canvas_push(const char letter) {
-  char string[] = {letter, '\0'};
-
-  history_canvas.printf(string);
+  history_canvas.printf("%c", letter);
   history_canvas.pushSprite(&M5.Display, 0, 76);
 }
 
@@ -67,18 +66,19 @@ void letter_canvas_draw(const char letter, bool is_done, bool is_error) {
   auto x = letter_canvas.width() / 2;
   auto y = letter_canvas.height() / 2;
 
-  letter_canvas.fillSprite(TFT_BLACK);
-
   if (!is_done) {
     if (is_error) {
+      letter_canvas.fillSprite(TFT_BLACK);
       letter_canvas.setTextColor(TFT_DARKGREEN);
     } else {
+      letter_canvas.fillSprite(TFT_BLACK);
       letter_canvas.setTextColor(TFT_GREEN);
     }
   } else {
-    if (is_error)
-      letter_canvas.setTextColor(TFT_RED);
-    else {
+    if (is_error) {
+      letter_canvas.fillSprite(TFT_RED);
+      letter_canvas.setTextColor(TFT_BLACK);
+    } else {
       letter_canvas.fillSprite(TFT_GREEN);
       letter_canvas.setTextColor(TFT_BLACK);
     }
@@ -105,121 +105,146 @@ void display_end(void) { M5_LOGI("Display stopped"); }
 MorseTimings timing = MorseTimings(100);
 MorseSequence seq = MorseSequence();
 
-bool adjusted = false;
-bool adjusted_message_printed = false;
-char adjust_pattern[5] = {DIT, DIT, DIT, DIT, DIT};
+millis32_t last_msec = 0;
+MorseSignal last_signal = NO_SIGNAL;
 
-bool adjust_loop(QueueHandle_t *morseQueue) {
-  SignalSilent message;
+typedef enum pause_state_e {
+  PAUSE_STATE_NONE = 0,
+  PAUSE_STATE_BEGIN = 1,
+  PAUSE_STATE_LETTER = 2,
+  PAUSE_STATE_WORD = 3,
+} pause_state_e;
 
-  if (xQueueReceive(*morseQueue, &message, timing.dit_dah_threshold) ==
-      pdPASS) {
-    if (message.is_silent) {
-      return false;
+pause_state_e pause_state = PAUSE_STATE_NONE;
+
+void morse_code_process_and_draw(bool is_signal, millis32_t interval) {
+  if (interval == 0) {
+    last_signal = NO_SIGNAL;
+    pause_state = PAUSE_STATE_NONE;
+  }
+
+  if (is_signal) {
+    if (timing.is_dit(interval) && last_signal != DIT) {
+      bool is_valid;
+
+      last_signal = DIT;
+      seq.signal_propose(DIT, interval);
+      is_valid = seq.is_valid_sequence();
+
+      morse_canvas_draw(seq.code);
+      letter_canvas_draw(seq.letter(), false, !is_valid);
+    } else if (timing.is_dah(interval) && last_signal != DAH) {
+      bool is_valid;
+
+      last_signal = DAH;
+      seq.signal_propose(DAH, interval);
+      is_valid = seq.is_valid_sequence();
+      morse_canvas_draw(seq.code);
+      letter_canvas_draw(seq.letter(), false, !is_valid);
     }
+  } else {
+    if (!seq.is_empty()) {
+      if (timing.is_letter(interval) && pause_state < PAUSE_STATE_LETTER) {
+        bool is_complete = seq.is_complete_sequence();
 
-    if (seq.len < sizeof(adjust_pattern)) {
-      seq.push(adjust_pattern[seq.len], &message);
-    }
+        pause_state = PAUSE_STATE_LETTER;
+        if (is_complete)
+          history_canvas_push(seq.letter());
+        letter_canvas_draw(seq.letter(), true, !is_complete);
+        seq.done();
+      } else if (pause_state < PAUSE_STATE_BEGIN) {
+        bool is_valid = seq.is_valid_sequence();
 
-    if (seq.len == sizeof(adjust_pattern)) {
-      timing.adjust(seq.len, seq.code, seq.interval);
-      seq.clear();
-      return true;
+        pause_state = PAUSE_STATE_BEGIN;
+        seq.signal_commit();
+        if (!is_valid) {
+          letter_canvas_draw(seq.letter(), true, true);
+          seq.clear();
+        }
+      }
+    } else if (timing.is_word(interval) && pause_state < PAUSE_STATE_WORD) {
+      pause_state = PAUSE_STATE_WORD;
+      history_canvas_push(' ');
     }
+  }
+}
+
+bool adjust_last_is_signal;
+bool adjust_message_displayed = false;
+M5Canvas adjust_canvas;
+
+bool time_adjust_loop(bool is_signal, millis32_t interval) {
+  const unsigned adjust_pattern_len = 4;
+  static const MorseSignal adjust_pattern[] = {DIT, DIT, DIT, DIT, NO_SIGNAL};
+
+  if (!adjust_message_displayed) {
+    adjust_canvas.createSprite(80, 154);
+    adjust_canvas.setTextScroll(true);
+    adjust_canvas.setTextDatum(top_center);
+    adjust_canvas.setTextSize(1.8f);
+    adjust_canvas.println("Type");
+    adjust_canvas.println(adjust_pattern);
+    adjust_canvas.println("to");
+    adjust_canvas.println("adjust");
+    adjust_canvas.println("DIT time");
+    adjust_canvas.pushSprite(&M5.Display, 0, 16);
+    adjust_message_displayed = true;
+  }
+
+  if (adjust_last_is_signal != is_signal) {
+    adjust_last_is_signal = is_signal;
+    if (!is_signal) {
+      seq.signal_commit();
+      adjust_canvas.printf("%" PRIu32 " ms\n", seq.interval[seq.len - 1]);
+      adjust_canvas.pushSprite(&M5.Display, 0, 16);
+      if (seq.len == adjust_pattern_len) {
+        timing.adjust(seq.len, seq.code, seq.interval);
+        seq.clear();
+        adjust_canvas.fillScreen(TFT_BLACK);
+        adjust_canvas.setCursor(0, 0);
+        adjust_canvas.printf("Average\n%" PRIu32 " ms", timing.dit_avg);
+        adjust_canvas.pushSprite(&M5.Display, 0, 16);
+        return true;
+      }
+    }
+  } else {
+    seq.signal_propose(DIT, interval);
   }
   return false;
 }
 
-void draw_adjust_message() {
-  M5.Display.setTextSize(2);
-  M5.Display.printf(" Type\r\n");
-  M5.Display.printf("%-*s\r\n", sizeof(adjust_pattern), adjust_pattern);
-  M5.Display.printf("  to \r\n");
-  M5.Display.printf("adjust\r\n");
-  M5.Display.printf("timing\r\n");
-}
+bool is_adjust_mode = true;
 
-void display_loop(QueueHandle_t *morseQueue) {
-  SignalSilent message;
+void display_loop() {
+  millis32_t interval;
+  bool is_signal;
 
-  if (!adjusted) {
-    if (!adjusted_message_printed) {
-      M5_LOGI("wait sequence for timing adjust: %-*s", sizeof(adjust_pattern),
-              adjust_pattern);
-      draw_adjust_message();
-      adjusted_message_printed = true;
-    }
-    if (adjust_loop(morseQueue)) {
-      adjusted = true;
-      M5_LOGI("timing adjust done: avg_dit is %" PRIu32
-              "ms, dit_dah_threshold: %" PRIu32
-              "ms, word_pause_threshold: %" PRIu32 "ms",
-              timing.dit_avg, timing.dit_dah_threshold,
-              timing.word_pause_threshold);
-    }
-    return;
+  M5.update();
+
+  if (M5.BtnB.wasPressed()) {
+    esp_restart();
   }
 
-  if (xQueueReceive(*morseQueue, &message, timing.dit_dah_threshold) ==
-      pdPASS) {
-    if (message.is_silent && !seq.is_empty()) {
-      if (timing.is_dah(message.interval)) {
-        M5_LOGI("LETTER-PAUSE: %" PRIu32 " ms", message.interval, seq.code);
-        if (seq.is_complete_sequence()) {
-          letter_canvas_draw(seq.letter(), true, false);
-          history_canvas_push(seq.letter());
-        } else {
-          letter_canvas_draw(seq.letter(), true, true);
-        }
-        seq.done();
-      }
+  is_signal = M5.BtnA.isPressed();
+  if (M5.BtnA.wasChangePressed()) {
+    last_msec = M5.getUpdateMsec();
+    interval = 0;
 
-      if (timing.is_word(message.interval)) {
-        M5_LOGI("WORD-PAUSE %" PRIu32 " ms", message.interval);
-        history_canvas_push(' ');
-      }
-      return;
-    } else if (!message.is_silent) {
-      const char *title;
-
-      if (timing.is_dah(message.interval)) {
-        seq.push(DAH, &message);
-        title = "DAH";
-      } else if (timing.is_dit(message.interval)) {
-        seq.push(DIT, &message);
-        title = "DIT";
-      } else {
-        M5_LOGI("unrecognized signal timing: %" PRIu32 " ms", message.interval);
-        return;
-      }
-
-      if (!seq.is_empty()) {
-        if (seq.is_valid_sequence()) {
-          M5_LOGI("%s: %" PRIu32 " ms ('%s': '%c')", title, message.interval,
-                  seq.code, seq.letter());
-          letter_canvas_draw(seq.letter(), false, !seq.is_complete_sequence());
-        } else {
-          M5_LOGI("clear unknown/invalid sequence: %s", seq.code);
-          seq.clear();
-          letter_canvas_clear();
-        }
-        morse_canvas_draw(seq.code);
-      }
-    }
-  } else if (!seq.is_empty()) {
-    M5_LOGI("done, signals num: %u ('%s': %c)", seq.len, seq.code,
-            seq.letter());
-    morse_canvas_draw(seq.code);
-    if (seq.is_complete_sequence()) {
-      letter_canvas_draw(seq.letter(), true, false);
-      history_canvas_push(seq.letter());
-    } else {
-      letter_canvas_draw(seq.letter(), true, true);
-    }
-    seq.done();
-    return;
   } else {
-    return;
+    interval = M5.getUpdateMsec() - last_msec;
+
+    if (interval < timing.dit_avg / 4) {
+      vTaskDelay(1);
+      return;
+    }
   }
+
+  if (!is_adjust_mode) {
+    morse_code_process_and_draw(is_signal, interval);
+  } else {
+    if (time_adjust_loop(is_signal, interval))
+      is_adjust_mode = false;
+  }
+
+  vTaskDelay(1);
 }

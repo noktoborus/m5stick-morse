@@ -1,7 +1,10 @@
 #include <cstdint>
 
+#define NO_SIGNAL '\0'
 #define DIT '.'
 #define DAH '_'
+
+typedef char MorseSignal;
 
 // Maximum length of sequence
 #define MORSE_SEQUENCE_MAX 10
@@ -12,7 +15,7 @@
 
 // > short gap (between letters): three time units long
 // - https://en.wikipedia.org/wiki/Morse_code#Representation,_timing,_and_speeds
-#define MORSE_LETTER_MUTLIPLIER 3
+#define MORSE_LETTER_MULTIPLIER 3
 
 // To distinguish DIT from DAH '2' is enough
 // because 'DAH is three time units long'
@@ -26,16 +29,11 @@
 
 typedef struct Morse {
   char alpha_num;
-  char code[MORSE_SEQUENCE_MAX];
+  MorseSignal code[MORSE_SEQUENCE_MAX];
 } Morse;
 
 // 32-bits milliseconds
 typedef uint32_t millis32_t;
-
-typedef struct MorseMessage {
-  millis32_t interval;
-  bool is_silent;
-} SignalSilent;
 
 class MorseTimings {
 public:
@@ -51,6 +49,9 @@ public:
   // True if `interval` is for dah
   bool is_dah(millis32_t interval);
 
+  // True if interval is for letter pause
+  bool is_letter(millis32_t interval);
+
   // True if interval is for word pause
   bool is_word(millis32_t interval);
 
@@ -58,7 +59,7 @@ public:
 
   // Adjust DIT time
   void adjust(unsigned length, char reference[MORSE_SEQUENCE_MAX],
-              SignalSilent new_timings[MORSE_SEQUENCE_MAX]);
+              millis32_t new_timings[MORSE_SEQUENCE_MAX]);
 };
 
 class MorseSequence {
@@ -70,9 +71,11 @@ private:
   /// Last founded code after `::is_valid_sequence()`
   const Morse *match;
 
+  unsigned committed;
+
 public:
-  char code[MORSE_SEQUENCE_MAX];
-  SignalSilent interval[MORSE_SEQUENCE_MAX];
+  MorseSignal code[MORSE_SEQUENCE_MAX];
+  millis32_t interval[MORSE_SEQUENCE_MAX];
   unsigned len;
 
   MorseSequence();
@@ -89,7 +92,14 @@ public:
   // callable only after `::is_valid_sequence()`
   char letter();
 
-  void push(char letter, SignalSilent *interval);
+  // Propose signal to queue
+  void signal_propose(MorseSignal signal, millis32_t interval);
+
+  // Commit last signal with new interval
+  void signal_commit();
+
+  // Discard all uncommitted signals
+  void signal_discard();
 
   void done();
 

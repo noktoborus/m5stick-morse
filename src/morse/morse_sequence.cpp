@@ -67,6 +67,7 @@ unsigned morse_get_code_threshold() {
 
 MorseSequence::MorseSequence() {
   this->morse_code_threshold = morse_get_code_threshold();
+  this->committed = 0;
 }
 
 bool MorseSequence::is_empty() { return this->len == 0; }
@@ -80,7 +81,7 @@ bool MorseSequence::is_valid_sequence() {
 
   for (unsigned i = 0; i < values; i++) {
     if (memcmp(this->code, MorseABC[i].code, this->len) == 0) {
-      if (MorseABC[i].code[this->len] == '\0') {
+      if (MorseABC[i].code[this->len] == NO_SIGNAL) {
         better_match = &MorseABC[i];
       } else if (!better_match) {
         better_match = &MorseABC[i];
@@ -97,7 +98,7 @@ bool MorseSequence::is_valid_sequence() {
 }
 
 bool MorseSequence::is_complete_sequence() {
-  if (this->match != NULL && this->match->code[this->len] == '\0')
+  if (this->match != NULL && this->match->code[this->len] == NO_SIGNAL)
     return true;
   return false;
 }
@@ -109,18 +110,27 @@ char MorseSequence::letter() {
   return ' ';
 }
 
-void MorseSequence::push(char letter, SignalSilent *interval) {
-  this->code[this->len] = letter;
-  this->interval[this->len] = *interval;
-  this->len++;
+void MorseSequence::signal_propose(MorseSignal signal, millis32_t interval) {
+  if (this->committed == this->len)
+    this->len++;
+
+  this->code[this->committed] = signal;
+  this->interval[this->committed] = interval;
+}
+
+void MorseSequence::signal_commit() { this->committed = this->len; }
+
+void MorseSequence::signal_discard() {
+  for (; this->len > this->committed; this->len--) {
+    this->code[this->len] = NO_SIGNAL;
+    this->interval[this->len] = 0;
+  }
+  this->match = NULL;
 }
 
 void MorseSequence::done() { this->clear(); }
 
 void MorseSequence::clear() {
-  for (; this->len > 0; this->len--) {
-    this->code[this->len] = '\0';
-    this->interval[this->len] = SignalSilent{};
-    this->match = NULL;
-  }
+  this->committed = 0;
+  this->signal_discard();
 }
