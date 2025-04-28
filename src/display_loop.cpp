@@ -250,10 +250,8 @@ void display_loop() {
   if (M5.BtnA.wasChangePressed()) {
     last_msec = M5.getUpdateMsec();
     interval = 0;
-    if (is_signal) {
-      first_signal_at = last_msec;
-      ticktack_canvas_tick(true);
-    }
+    first_signal_at = last_msec;
+    ticktack_canvas_tick(true);
   }
 
   if (!is_adjust_mode) {
