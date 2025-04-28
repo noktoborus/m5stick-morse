@@ -38,6 +38,20 @@ const static Morse MorseABC[] = {
     {'8', {DAH, DAH, DAH, DIT, DIT}},
     {'9', {DAH, DAH, DAH, DAH, DIT}},
     {'0', {DAH, DAH, DAH, DAH, DAH}},
+    {'.', {DIT, DAH, DIT, DAH, DIT, DAH}},
+    {',', {DAH, DAH, DIT, DIT, DAH, DAH}},
+    {'?', {DIT, DIT, DAH, DAH, DIT, DIT}},
+    {'\'', {DIT, DAH, DAH, DAH, DAH, DIT}},
+    {'/', {DAH, DIT, DIT, DAH, DIT}},
+    {'(', {DAH, DIT, DAH, DAH, DIT}},
+    {')', {DAH, DIT, DAH, DAH, DIT, DAH}},
+    {':', {DAH, DAH, DAH, DIT, DIT, DIT}},
+    {'=', {DAH, DIT, DIT, DIT, DAH}},
+    {'+', {DIT, DAH, DIT, DAH, DIT}},
+    {'-', {DAH, DIT, DIT, DIT, DIT, DAH}},
+    {'_', {DIT, DIT, DAH, DAH, DIT, DAH}},
+    {'"', {DIT, DAH, DIT, DIT, DAH, DIT}},
+
 };
 
 unsigned len(const char *ptr) {
