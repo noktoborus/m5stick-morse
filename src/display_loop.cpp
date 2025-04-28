@@ -180,6 +180,7 @@ void morse_code_process_and_draw(bool is_signal, millis32_t interval) {
     } else if (timing.is_word(interval) && pause_state < PAUSE_STATE_WORD) {
       pause_state = PAUSE_STATE_WORD;
       history_canvas_push(' ');
+      letter_canvas_draw(' ', false, false);
     }
   }
 }
