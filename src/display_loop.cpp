@@ -16,8 +16,23 @@ void ticktack_canvas_setup(void) {
 }
 
 void ticktack_canvas_tick(void) {
-  // TODO: нужно переделать очередь ожиданиz символовЖ вместо ожидания word и
-  // спользовать время ожидания dit, после каждого таймаута тикать бар
+  static int blocks[] = {TFT_RED, TFT_YELLOW, TFT_GREEN, TFT_BLUE, TFT_ORANGE};
+  static unsigned current = 0;
+  const auto blocks_count = sizeof(blocks) / sizeof(blocks[0]);
+
+  auto width = ticktack_canvas.width();
+  auto height = ticktack_canvas.height();
+  auto block_size = width / 5;
+  auto offset = block_size * current;
+
+  if (current == blocks_count)
+    ticktack_canvas.fillSprite(TFT_BLACK);
+
+  ticktack_canvas.fillRect(offset, 0, block_size, height, blocks[current]);
+  if (current > blocks_count)
+    current = 0;
+  else
+    current++;
   ticktack_canvas.pushSprite(&M5.Display, 0, 156);
 }
 
@@ -214,6 +229,8 @@ bool time_adjust_loop(bool is_signal, millis32_t interval) {
 }
 
 bool is_adjust_mode = true;
+millis32_t first_signal_at = 0;
+unsigned ticked = 0;
 
 void display_loop() {
   millis32_t interval;
@@ -229,8 +246,24 @@ void display_loop() {
   if (M5.BtnA.wasChangePressed()) {
     last_msec = M5.getUpdateMsec();
     interval = 0;
+    if (is_signal && (first_signal_at == 0 || first_signal_at > last_msec)) {
+      first_signal_at = last_msec;
+    }
+  }
 
-  } else {
+  if (!is_adjust_mode) {
+    unsigned new_tick_value =
+        (M5.getUpdateMsec() - first_signal_at) / timing.dit_avg;
+
+    if (new_tick_value != ticked) {
+      ticked = new_tick_value;
+      M5.Log.printf("ticks=%u time=%" PRIu32 " dit_avg=%" PRIu32 "\n", ticked,
+                    M5.getUpdateMsec(), timing.dit_avg);
+      ticktack_canvas_tick();
+    }
+  }
+
+  if (!M5.BtnA.wasChangePressed()) {
     interval = M5.getUpdateMsec() - last_msec;
 
     if (interval < timing.dit_avg / 4) {
