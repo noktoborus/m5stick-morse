@@ -135,6 +135,14 @@ typedef enum pause_state_e {
 
 pause_state_e pause_state = PAUSE_STATE_NONE;
 
+void morse_code_redraw() {
+  bool is_valid = seq.is_valid_sequence();
+  bool is_complete = seq.is_complete_sequence();
+
+  morse_canvas_draw(seq.code);
+  letter_canvas_draw(seq.letter(), !is_valid, !is_valid || !is_complete);
+}
+
 void morse_code_process_and_draw(bool is_signal, millis32_t interval) {
   if (interval == 0) {
     last_signal = NO_SIGNAL;
@@ -143,22 +151,13 @@ void morse_code_process_and_draw(bool is_signal, millis32_t interval) {
 
   if (is_signal) {
     if (timing.is_dit(interval) && last_signal != DIT) {
-      bool is_valid;
-
       last_signal = DIT;
       seq.signal_propose(DIT, interval);
-      is_valid = seq.is_valid_sequence();
-
-      morse_canvas_draw(seq.code);
-      letter_canvas_draw(seq.letter(), false, !is_valid);
+      morse_code_redraw();
     } else if (timing.is_dah(interval) && last_signal != DAH) {
-      bool is_valid;
-
       last_signal = DAH;
       seq.signal_propose(DAH, interval);
-      is_valid = seq.is_valid_sequence();
-      morse_canvas_draw(seq.code);
-      letter_canvas_draw(seq.letter(), false, !is_valid);
+      morse_code_redraw();
     }
   } else {
     if (!seq.is_empty()) {
