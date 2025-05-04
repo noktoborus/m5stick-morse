@@ -1,5 +1,7 @@
 #include "app.hpp"
+#include "driver/ledc.h"
 #include "freertos/idf_additions.h"
+#include "hal/ledc_types.h"
 #include "lgfx/v1/misc/enum.hpp"
 #include "morse/morse.hpp"
 #include "utility/Log_Class.hpp"
@@ -106,6 +108,48 @@ void letter_canvas_draw(const char letter, bool is_done, bool is_error) {
   letter_canvas.pushSprite(&M5.Display, 0, 16);
 };
 
+#define GPIO_INPUT 0
+#define GPIO_OUTPUT 13
+#define GPIO_OUTPUT_SPEED LEDC_HIGH_SPEED_MODE
+
+void sound_setup(int gpio_num, uint32_t freq) {
+  ledc_timer_config_t timer_conf = {
+      .speed_mode = GPIO_OUTPUT_SPEED,
+      .duty_resolution = LEDC_TIMER_10_BIT,
+      .timer_num = LEDC_TIMER_0,
+      .freq_hz = freq,
+      .clk_cfg = LEDC_USE_REF_TICK,
+      .deconfigure = false,
+  };
+  ledc_timer_config(&timer_conf);
+
+  ledc_channel_config_t ledc_conf = {
+      .gpio_num = gpio_num,
+      .speed_mode = GPIO_OUTPUT_SPEED,
+      .channel = LEDC_CHANNEL_0,
+      .intr_type = LEDC_INTR_DISABLE,
+      .timer_sel = LEDC_TIMER_0,
+      .duty = 0x0,
+      .hpoint = 0,
+      .sleep_mode = LEDC_SLEEP_MODE_NO_ALIVE_NO_PD,
+      .flags =
+          {
+              .output_invert = 0,
+          },
+  };
+  ledc_channel_config(&ledc_conf);
+}
+
+void sound_start(void) {
+  ledc_set_duty(GPIO_OUTPUT_SPEED, LEDC_CHANNEL_0, 0x7F);
+  ledc_update_duty(GPIO_OUTPUT_SPEED, LEDC_CHANNEL_0);
+};
+
+void sound_stop(void) {
+  ledc_set_duty(GPIO_OUTPUT_SPEED, LEDC_CHANNEL_0, 0);
+  ledc_update_duty(GPIO_OUTPUT_SPEED, LEDC_CHANNEL_0);
+};
+
 void display_setup(void) {
   M5.Display.setBrightness(80);
   morse_canvas_setup();
@@ -114,6 +158,7 @@ void display_setup(void) {
   ticktack_canvas_setup();
   ticktack_canvas_tick();
   morse_canvas_draw("MORSE");
+  sound_setup(2, 660);
   M5_LOGI("Display start with size: %" PRIu32 "x%" PRIu32, M5.Display.height(),
           M5.Display.width());
 }
@@ -251,6 +296,10 @@ void display_loop() {
     interval = 0;
     first_signal_at = last_msec;
     ticktack_canvas_tick(true);
+    if (is_signal)
+      sound_start();
+    else
+      sound_stop();
   }
 
   if (!is_adjust_mode) {
