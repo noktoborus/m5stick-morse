@@ -1,9 +1,8 @@
 #include "app.hpp"
-#include "driver/ledc.h"
 #include "freertos/idf_additions.h"
-#include "hal/ledc_types.h"
 #include "lgfx/v1/misc/enum.hpp"
 #include "morse/morse.hpp"
+#include "sound/sound.h"
 #include "utility/Log_Class.hpp"
 #include <M5Unified.h>
 
@@ -12,8 +11,12 @@ M5Canvas letter_canvas;
 M5Canvas history_canvas;
 M5Canvas ticktack_canvas;
 
+#define MORSE_HEIGTH 16
+#define LETTER_HEIGHT 60
+#define TICKTACK_HEIGHT 4
+
 void ticktack_canvas_setup(void) {
-  ticktack_canvas.createSprite(80, 4);
+  ticktack_canvas.createSprite(M5.Display.width(), TICKTACK_HEIGHT);
   ticktack_canvas.fillSprite(TFT_DARKGREEN);
 }
 
@@ -38,11 +41,14 @@ void ticktack_canvas_tick(bool reset = false) {
     current = 0;
   else
     current++;
-  ticktack_canvas.pushSprite(&M5.Display, 0, 156);
+  ticktack_canvas.pushSprite(&M5.Display, 0,
+                             M5.Display.height() - ticktack_canvas.height());
 }
 
 void history_canvas_setup(void) {
-  history_canvas.createSprite(80, 80);
+  history_canvas.createSprite(M5.Display.width(),
+                              M5.Display.height() - MORSE_HEIGTH -
+                                  LETTER_HEIGHT - TICKTACK_HEIGHT);
   history_canvas.fillSprite(TFT_BLACK);
   history_canvas.setTextSize(2);
   history_canvas.setTextColor(TFT_DARKGREEN);
@@ -51,11 +57,11 @@ void history_canvas_setup(void) {
 
 void history_canvas_push(const char letter) {
   history_canvas.printf("%c", letter);
-  history_canvas.pushSprite(&M5.Display, 0, 76);
+  history_canvas.pushSprite(&M5.Display, 0, MORSE_HEIGTH + LETTER_HEIGHT);
 }
 
 void morse_canvas_setup(void) {
-  morse_canvas.createSprite(80, 16);
+  morse_canvas.createSprite(M5.Display.width(), MORSE_HEIGTH);
   morse_canvas.fillSprite(TFT_ORANGE);
   morse_canvas.setTextSize(2);
   morse_canvas.setTextColor(TFT_BLACK);
@@ -74,7 +80,7 @@ void morse_canvas_draw(const char code[MORSE_SEQUENCE_MAX]) {
 void letter_canvas_clear() { letter_canvas.fillSprite(TFT_BLACK); };
 
 void letter_canvas_setup(void) {
-  letter_canvas.createSprite(80, 60);
+  letter_canvas.createSprite(M5.Display.width(), LETTER_HEIGHT);
   letter_canvas.fillSprite(TFT_BLACK);
   letter_canvas.setTextSize(4);
   letter_canvas.setTextDatum(middle_center);
@@ -108,57 +114,14 @@ void letter_canvas_draw(const char letter, bool is_done, bool is_error) {
   letter_canvas.pushSprite(&M5.Display, 0, 16);
 };
 
-#define GPIO_INPUT 0
-#define GPIO_OUTPUT 13
-#define GPIO_OUTPUT_SPEED LEDC_HIGH_SPEED_MODE
-
-void sound_setup(int gpio_num, uint32_t freq) {
-  ledc_timer_config_t timer_conf = {
-      .speed_mode = GPIO_OUTPUT_SPEED,
-      .duty_resolution = LEDC_TIMER_10_BIT,
-      .timer_num = LEDC_TIMER_0,
-      .freq_hz = freq,
-      .clk_cfg = LEDC_USE_REF_TICK,
-      .deconfigure = false,
-  };
-  ledc_timer_config(&timer_conf);
-
-  ledc_channel_config_t ledc_conf = {
-      .gpio_num = gpio_num,
-      .speed_mode = GPIO_OUTPUT_SPEED,
-      .channel = LEDC_CHANNEL_0,
-      .intr_type = LEDC_INTR_DISABLE,
-      .timer_sel = LEDC_TIMER_0,
-      .duty = 0x0,
-      .hpoint = 0,
-      .sleep_mode = LEDC_SLEEP_MODE_NO_ALIVE_NO_PD,
-      .flags =
-          {
-              .output_invert = 0,
-          },
-  };
-  ledc_channel_config(&ledc_conf);
-}
-
-void sound_start(void) {
-  ledc_set_duty(GPIO_OUTPUT_SPEED, LEDC_CHANNEL_0, 0x7F);
-  ledc_update_duty(GPIO_OUTPUT_SPEED, LEDC_CHANNEL_0);
-};
-
-void sound_stop(void) {
-  ledc_set_duty(GPIO_OUTPUT_SPEED, LEDC_CHANNEL_0, 0);
-  ledc_update_duty(GPIO_OUTPUT_SPEED, LEDC_CHANNEL_0);
-};
-
 void display_setup(void) {
   M5.Display.setBrightness(80);
   morse_canvas_setup();
   letter_canvas_setup();
   history_canvas_setup();
   ticktack_canvas_setup();
-  ticktack_canvas_tick();
+  sound_setup();
   morse_canvas_draw("MORSE");
-  sound_setup(2, 660);
   M5_LOGI("Display start with size: %" PRIu32 "x%" PRIu32, M5.Display.height(),
           M5.Display.width());
 }
@@ -241,7 +204,7 @@ bool time_adjust_loop(bool is_signal, millis32_t interval) {
   static const MorseSignal adjust_pattern[] = {DIT, DIT, DIT, DIT, NO_SIGNAL};
 
   if (!adjust_message_displayed) {
-    adjust_canvas.createSprite(80, 154);
+    adjust_canvas.createSprite(M5.Display.width(), 154);
     adjust_canvas.setTextScroll(true);
     adjust_canvas.setTextDatum(top_center);
     adjust_canvas.setTextSize(1.8f);
