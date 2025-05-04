@@ -3,15 +3,6 @@
 #include "morse/morse.hpp"
 
 extern "C" {
-void buttonTask(void *) {
-  button_setup();
-  for (;;) {
-    button_loop();
-  }
-  button_end();
-  vTaskDelete(NULL);
-}
-
 void displayTask(void *) {
   display_setup();
   for (;;) {
@@ -23,7 +14,6 @@ void displayTask(void *) {
 
 void app_main(void) {
   setup();
-  xTaskCreatePinnedToCore(buttonTask, "buttonTask", 8192, NULL, 1, NULL, 1);
   xTaskCreatePinnedToCore(displayTask, "displayTask", 8192, NULL, 1, NULL, 0);
 }
 }
