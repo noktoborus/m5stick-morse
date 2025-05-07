@@ -249,7 +249,7 @@ void display_loop() {
 
   M5.update();
 
-  if (M5.BtnB.wasPressed()) {
+  if (M5.BtnPWR.wasPressed()) {
     esp_restart();
   }
 
